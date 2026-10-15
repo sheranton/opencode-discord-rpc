@@ -1,0 +1,34 @@
+{
+  "name": "opencode-discord-rpc",
+  "version": "2.0.0",
+  "description": "Discord Rich Presence plugin for OpenCode V2 - show your AI coding activity in Discord. Dependency-free IPC implementation.",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "discord",
+    "rich-presence",
+    "rpc",
+    "discord-rpc",
+    "ai",
+    "coding"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sheranton/opencode-discord-rpc"
+  },
+  "bugs": {
+    "url": "https://github.com/sheranton/opencode-discord-rpc/issues"
+  },
+  "homepage": "https://github.com/sheranton/opencode-discord-rpc#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
