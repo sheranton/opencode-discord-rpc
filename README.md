@@ -3,13 +3,29 @@
 Discord Rich Presence for [OpenCode](https://opencode.ai) **V2** — show your AI
 coding activity in Discord.
 
-- Shows the model you're using (e.g. `claude-sonnet-4`, `gpt-4o`)
+- Shows the **model** the active session is using (e.g. `claude-sonnet-4`, `gpt-4o`)
+- Shows the **project / session** you're coding in
+- Shows the **live token count** in the session's context
 - Live activity status — **Coding** / **Thinking** / **Waiting for input** / **Idle**
 - Session elapsed timer
 - "Visit OpenCode.ai" button
-- Auto-reconnects if Discord restarts
+- Auto-reconnects if Discord restarts, and throttles updates to respect Discord's rate limit
 - **Zero dependencies, zero build step** — talks to Discord over its local IPC
   pipe directly, so there's nothing to `npm install` and nothing to compile
+
+### What the card looks like
+
+```
+┌─────────────────────────────────────────────┐
+│ [OpenCode Logo]                               │
+│ Using claude-sonnet-4-5                       │   ← model
+│ Coding · my-project · 34.2k tok               │   ← status · project · context tokens
+│ 00:12:48 elapsed                              │   ← session timer
+│ [ Visit OpenCode.ai ]                         │
+└─────────────────────────────────────────────┘
+```
+
+Hovering the icon shows the current **session title**.
 
 > **Built for OpenCode V2.** The V2 plugin API is a breaking change from V1. If
 > you're on a V1 plugin you'll see `PluginModule.LoadError: Plugin must export a
@@ -98,6 +114,9 @@ variables:
 | `OPENCODE_DISCORD_CLIENT_ID` | Use your own Discord Application ID | built-in |
 | `OPENCODE_DISCORD_RETRY_INTERVAL` | Reconnect interval in ms | `15000` |
 | `OPENCODE_DISCORD_MAX_RETRIES` | Max reconnection attempts | `5` |
+| `OPENCODE_DISCORD_SHOW_PROJECT` | Set to `"false"` to hide the project name | `"true"` |
+| `OPENCODE_DISCORD_SHOW_SESSION` | Set to `"false"` to hide the session title | `"true"` |
+| `OPENCODE_DISCORD_SHOW_TOKENS` | Set to `"false"` to hide the context token count | `"true"` |
 
 ### Using your own Discord Application (optional)
 
@@ -115,24 +134,36 @@ The built-in client ID ships the OpenCode logo assets. To use your own app:
 
 On `setup`, the plugin:
 
-1. Resolves your current model via `ctx.model.default()`.
-2. Opens Discord's local IPC pipe (`\\?\pipe\discord-ipc-N` on Windows, or
+1. Opens Discord's local IPC pipe (`\\?\pipe\discord-ipc-N` on Windows, or
    `$XDG_RUNTIME_DIR/discord-ipc-N` on *nix), performs the v1 handshake, and
    waits for the `READY` frame.
-3. Subscribes to the OpenCode event stream (`ctx.event.subscribe`) and maps
-   events to presence state:
+2. Seeds the model from `ctx.model.default()` and the project from
+   `ctx.location.project`.
+3. Subscribes to the OpenCode event stream (`ctx.event.subscribe`). Each event
+   carries a `data.sessionID`; the plugin maps the event type to a status and
+   (throttled) calls `ctx.session.get({ sessionID })` to read the authoritative
+   `Session.Info`:
 
    | OpenCode event | Presence |
    | --- | --- |
-   | `session.created` | resets timer → **Coding** |
+   | `session.created` | resets timer → **Coding**, loads project/title |
+   | `session.updated` | refreshes model/title/tokens |
    | `session.status` (`busy` / `idle`) | **Coding** / **Waiting for input** |
-   | `message.part.updated`, `message.updated` | **Thinking** |
-   | `session.idle` | **Idle** |
+   | `message.part.updated`, `message.updated` | **Thinking**, refreshes tokens |
+   | `session.idle` | **Idle**, final token refresh |
    | `session.deleted` | presence cleared |
 
-Presence updates are sent as `SET_ACTIVITY` IPC frames. If Discord isn't running
-yet, the plugin retries on the configured interval. On plugin unload it aborts
-the event stream and clears the presence.
+**Where the data comes from.** `Session.Info` gives the per-session
+`model` (`Model.Ref`), `title`, `location.directory` (project), and `tokens`
+(`{ input, output, reasoning, cache: { read, write } }`). The "context tokens"
+figure is `input + cache.read + cache.write` — the size of the prompt window on
+the last request.
+
+**Throttling.** Presence frames are sent at most every 2.5s and session
+lookups at most every 2s, with a trailing flush so the final state always
+lands. This keeps streaming turns from tripping Discord's `SET_ACTIVITY` rate
+limit. If Discord isn't running yet, the plugin retries on the configured
+interval. On plugin unload it aborts the event stream and clears the presence.
 
 ---
 
@@ -165,9 +196,23 @@ config and use the `"plugins"` path entry from the install steps above.
 
 ## Privacy
 
-This plugin does **not** expose your project name/path, file names, file
-contents, or any code or conversation text. It shows only: the model name, your
-activity status, and how long the session has been active.
+By default this plugin displays the **model name**, the **project folder name**,
+the **session title**, your **activity status**, the **context token count**,
+and how long the session has been active.
+
+It never exposes file paths, file names, file contents, or any code or
+conversation text. If you'd rather not broadcast the project or session, turn
+off the relevant fields:
+
+```jsonc
+// in your shell environment, or an "env" block in opencode.jsonc
+OPENCODE_DISCORD_SHOW_PROJECT=false
+OPENCODE_DISCORD_SHOW_SESSION=false
+OPENCODE_DISCORD_SHOW_TOKENS=false
+```
+
+> The project name shown is only the **last folder name** of the working
+> directory (e.g. `my-project`), never the full path.
 
 ---
 

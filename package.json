@@ -1,7 +1,7 @@
 {
   "name": "opencode-discord-rpc",
-  "version": "2.0.0",
-  "description": "Discord Rich Presence plugin for OpenCode V2 - show your AI coding activity in Discord. Dependency-free IPC implementation.",
+  "version": "2.1.0",
+  "description": "Discord Rich Presence plugin for OpenCode V2 - show your model, project/session, and live context token count in Discord. Dependency-free IPC implementation.",
   "type": "module",
   "main": "index.js",
   "files": [
